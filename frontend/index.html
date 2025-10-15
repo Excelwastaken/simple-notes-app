@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Notes App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #f5f5f5;
+      --card: #fff;
+      --border: #ddd;
+      --text: #222;
+      --accent: #007bff;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, sans-serif;
+      max-width: 700px;
+      margin: 20px auto;
+      padding: 0 10px;
+    }
+    h1 { margin-bottom: 12px; text-align: center; }
+    form { display: grid; gap: 8px; margin-bottom: 16px; }
+    input, textarea, button {
+      padding: 8px; font-size: 16px;
+      border: 1px solid var(--border); border-radius: 6px;
+    }
+    button { cursor: pointer; background: var(--accent); color: #fff; border: none; }
+    .note {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px; margin: 8px 0;
+    }
+    .note h3 { margin: 0 0 6px 0; }
+    .note p[contenteditable="true"] {
+      outline: 1px dashed var(--accent);
+      background: #eef6ff;
+    }
+    .row { display: flex; gap: 6px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <h1>My Notes</h1>
+
+  <form id="createForm">
+    <input name="title" placeholder="Title" required />
+    <textarea name="content" placeholder="Content" rows="3" required></textarea>
+    <button type="submit">Add Note</button>
+  </form>
+
+  <div id="notesList"></div>
+
+  <script>
+    const API = "http://localhost:8080";
+    const list = document.getElementById("notesList");
+    const form = document.getElementById("createForm");
+
+    async function loadNotes() {
+      const res = await fetch(API + "/notes");
+      const notes = await res.json();
+      render(notes);
+    }
+
+    function render(notes) {
+      list.innerHTML = "";
+      if (!notes.length) {
+        list.innerHTML = "<p style='color:#555;text-align:center;'>No notes yet — add one!</p>";
+        return;
+      }
+      notes.forEach(n => {
+        const div = document.createElement("div");
+        div.className = "note";
+        div.innerHTML = `
+          <h3 contenteditable="false">${n.title}</h3>
+          <p contenteditable="false">${n.content}</p>
+          <div class="row">
+            <button data-act="edit">Edit</button>
+            <button data-act="save" style="display:none">Save</button>
+            <button data-act="delete">Delete</button>
+          </div>
+        `;
+        const titleEl = div.querySelector("h3");
+        const contentEl  = div.querySelector("p");
+        const editBtn = div.querySelector('[data-act="edit"]');
+        const saveBtn = div.querySelector('[data-act="save"]');
+        const delBtn  = div.querySelector('[data-act="delete"]');
+
+        editBtn.onclick = () => {
+          titleEl.contentEditable = contentEl.contentEditable = "true";
+          titleEl.focus();
+          editBtn.style.display = "none";
+          saveBtn.style.display = "inline-block";
+        };
+
+        saveBtn.onclick = async () => {
+          const payload = {
+            title: titleEl.textContent.trim(),
+            content: contentEl.textContent.trim()
+          };
+          await fetch(`${API}/notes/${n.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          titleEl.contentEditable = contentEl.contentEditable = "false";
+          saveBtn.style.display = "none";
+          editBtn.style.display = "inline-block";
+          loadNotes();
+        };
+
+        delBtn.onclick = async () => {
+          await fetch(`${API}/notes/${n.id}`, { method: "DELETE" });
+          loadNotes();
+        };
+
+        list.appendChild(div);
+      });
+    }
+
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const payload = { title: fd.get("title"), content: fd.get("content") };
+      await fetch(API + "/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      form.reset();
+      loadNotes();
+    };
+
+    loadNotes();
+  </script>
+</body>
+</html>
